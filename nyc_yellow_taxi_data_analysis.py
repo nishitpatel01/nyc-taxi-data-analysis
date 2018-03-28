@@ -81,7 +81,9 @@ plt.show()
  
 
 # DISTRIBUTION OF TRIP DISTANCE BY HOUR
-s.pairplot(taxi_dt, vars=["fare_amount", "tip_amount"], size=5)
+s.pairplot(taxi_dt, vars=["tip_amount","fare_amount"], size=5)
+
+
 
 # random stuff for own testing
 y = taxi_dt.fare_amount

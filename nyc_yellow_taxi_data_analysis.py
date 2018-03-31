@@ -19,6 +19,8 @@ from scipy.stats import ttest_ind, f_oneway, lognorm, levy, skew, chisquare
 #import scipy.stats as st
 from tabulate import tabulate #pretty print of tables. source: http://txt.arboreus.com/2013/03/13/pretty-print-tables-in-python.html
 
+import gmplot
+import psycopg2
 
 taxi_dt = pd.read_csv('C:/Users/NishitP/Desktop/UIUC MCS-DS/CS-498 - Cloud Computing Applications - SPRING 2018/Project/nyc_taxi_data.csv', sep=',')
 
@@ -155,6 +157,55 @@ ax[1].legend(['Airport trips','Non-airport trips'],loc='best',title='group')
 plt.show()
 
 list(taxi_dt)
+
+
+#DO PEOPLE LIKE TO TRAVEL IN GROUP/SHARE RIDES OR PREFER TO RIDE ALONE
+passenger_trips = taxi_dt.groupby(['passenger_count']).size().reset_index(name='trip_count')
+print(passenger_trips)
+
+plt.bar(passenger_trips.passenger_count,passenger_trips.trip_count,align='center', alpha=0.7)
+plt.xticks(passenger_trips.trip_count,passenger_trips.passenger_count)
+plt.ylabel('Trip Counts')
+plt.title('Trips vs number of passengers')
+ 
+plt.show()
+# TO BE COMPLETED..........
+
+#MOST COMMON PICKUP AND DROPOFF LOCATIONS
+
+
+# Fetch all the data returned by the database query as a list
+lat_long = taxi_dt[['pickup_lattitude','pickup_longtidue']] #misspelled in data prep
+len(lat_long)
+lat_long = lat_long.values.T.tolist()
+
+# Initialize two empty lists to hold the latitude and longitude values
+latitude = []
+longitude = [] 
+
+# Transform the the fetched latitude and longitude data into two separate lists
+for i in range(len(lat_long)):
+	latitude.append(lat_long[i][0])
+	longitude.append(lat_long[i][1])
+
+# Initialize the map to the first location in the list
+gmap = gmplot.GoogleMapPlotter(latitude[0],longitude[0],1)
+
+# Draw the points on the map. I created my own marker for '#FF66666'. 
+# You can use other markers from the available list of markers. 
+# Another option is to place your own marker in the folder - 
+# /usr/local/lib/python3.5/dist-packages/gmplot/markers/
+gmap.scatter(latitude, longitude, '#FF6666', edge_width=10)
+
+# Write the map in an HTML file
+gmap.draw('map.html')
+
+#############################################
+############################################
+
+
+gmap = gmplot.GoogleMapPlotter.from_geocode("New York")
+gmap.draw('map.html')
 
 # random stuff for own testing
 y = taxi_dt.fare_amount

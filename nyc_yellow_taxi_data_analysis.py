@@ -41,7 +41,7 @@ taxi_dt.describe()
 
 # DISTRIBUTION OF TRIP DISTANCES
 # define the figure with 2 subplots
-fig,ax = plt.subplots(1,2,figsize = (15,4)) 
+fig,ax = plt.pyplot.subplots(1,2,figsize = (15,4)) 
 
 # histogram of the number of trip distance
 taxi_dt.trip_distance.hist(bins=20,ax=ax[0], edgecolor='black')
@@ -107,7 +107,7 @@ airport_trips = taxi_dt[(taxi_dt.rate_code == 2) | (taxi_dt.rate_code ==3)]  #ra
 
 airport_trips['pickup_hour'] = airport_trips['pickup_time'].str[:2]
 
-fix, axis = plt.subplots(1,1,figsize=(12,7))
+fix, axis = plt.pyplot.subplots(1,1,figsize=(12,7))
 #aggregate trip_distance by hour for plotting
 tab = airport_trips.pivot_table(index='pickup_hour', values='trip_distance', aggfunc=('mean','median')).reset_index()
      
@@ -174,6 +174,7 @@ plt.show()
 #MOST COMMON PICKUP AND DROPOFF LOCATIONS
 
 
+
 # Fetch all the data returned by the database query as a list
 lat_long = taxi_dt[['pickup_lattitude','pickup_longtidue']] #misspelled in data prep
 len(lat_long)
@@ -206,6 +207,11 @@ gmap.draw('map.html')
 
 gmap = gmplot.GoogleMapPlotter.from_geocode("New York")
 gmap.draw('map.html')
+
+
+
+
+
 
 # random stuff for own testing
 y = taxi_dt.fare_amount

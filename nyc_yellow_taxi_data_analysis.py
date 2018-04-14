@@ -98,7 +98,7 @@ plt.show()
 # Q: does time of the day affect the taxi ridership?
 taxi_dt['pickup_hour'] = taxi_dt['pickup_time'].str[:2]
 
-fix, axis = plt.pyplot.subplots(1,1,figsize=(12,7))
+fix, axis = plt.subplots(1,1,figsize=(12,7))
 #aggregate trip_distance by hour for plotting
 tab = taxi_dt.pivot_table(index='pickup_hour', values='trip_distance', aggfunc=('mean','median')).reset_index()
      
@@ -210,13 +210,41 @@ s.countplot(x="passenger_count",data=oct_rides,ax=axs[1])
 s.countplot(x="passenger_count",data=nov_rides,ax=axs[2])
 s.countplot(x="passenger_count",data=dec_rides,ax=axs[3])
 
+""" from the monthly passenger count plots, it looks like that most of the rides throughout the year were from single riders. There are
+rides in 30-40k ranges which has more than one passengers. Interesting observation here is from January to August, we see that the most 
+number of passengers are between 1-6 but in the last months and specifically in holiday seasons (november and december) there are many
+rides with passenger count of upto 9. We do not see the numbers in chart because it is relatively smaller than smaller passenger rides but 
+it is appearing in plot because it does exists there. This trend implies that during the holiday seasons, people are indeed traveling more
+in groups compare to rest of the time.
+"""
+
+# TIP RATE AS FUNCTION OF TIME/LOCATION
+# Q: how does tipping rate change according to location and peak timing
+fix, axis = plt.subplots(1,1,figsize=(12,7))
+#aggregate trip_distance by hour for plotting
+taxi_dt["tip_percent"] = taxi_dt["tip_amount"] / taxi_dt["total_amount"] * 100
+
+taxi_dt["tip_percent"].unique()
+taxi_dt["tip_percent"] = taxi_dt["tip_percent"].replace(np.inf,0)
+taxi_dt["tip_percent"] = taxi_dt["tip_percent"].replace(np.nan,0)
+taxi_dt.tip_percent = taxi_dt.tip_percent.astype(np.int64)
+
+tab = taxi_dt.pivot_table(index='pickup_hour', values='tip_percent', aggfunc=('mean','median')).reset_index()
+     
+tab.columns = ['Hour','Mean_tip','Median_tip']
+tab[['Mean_tip','Median_tip']].plot(ax=axis)
+plt.ylabel('Tip percent')
+plt.xlabel('Hours after midnight')
+plt.title('Distribution of trip percent by pickup hour')
+plt.xlim([0,23])
+plt.show()
+
+""" From the chart, it looks like that riders are giving more tips during morning peak commute hours and in the night. At some point the 
+median  tip is close to 0 but mean tip si considerably higher. This is because there are many trips with no tip at all and there is no data
+available for certain rides. during the processing, we make those tip values to be 0. 
 """
 
 
-
-plt.figure(figsize=(12,8))
-s.countplot(x="pickup_weekday_name", data=taxi_dt)
-plt.show()
 
 
 # TRAVEL IN TIME OF THE YEAR

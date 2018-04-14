@@ -7,7 +7,7 @@ Created on Wed Mar 21 20:37:08 2018
 
 import pandas as pd
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import seaborn as s
 
 from sklearn.preprocessing import normalize, scale
@@ -21,6 +21,7 @@ from tabulate import tabulate #pretty print of tables. source: http://txt.arbore
 
 import gmplot
 import psycopg2
+
 
 taxi_dt = pd.read_csv('C:/Users/NishitP/Desktop/UIUC MCS-DS/CS-498 - Cloud Computing Applications - SPRING 2018/Project/nyc_taxi_data.csv', sep=',')
 
@@ -70,20 +71,23 @@ ax[1].legend(['data','lognormal fit'])
 plt.show()
  
 
-# DISTRIBUTION OF TRIP DISTANCE BY HOUR
+
+# DISTRIBUTION OF TRIP DISTANCE BY PICKUP HOUR
 s.pairplot(taxi_dt, vars=["tip_amount","fare_amount"], size=5)
 
 taxi_dt.plot.scatter("fare_amount","tip_amount",alpha=0.5)
 plt.title("Fare Amount vs Tip")
 plt.show()
 
+taxi_dt
 
-#RIDERSHIP IMPACT OF TIME OF THE DAY ON TRIP DISTANCE
+
+# Q: RIDERSHIP IMPACT OF TIME OF THE DAY ON TRIP DISTANCE BY PICKUP HOUR
 taxi_dt['pickup_hour'] = taxi_dt['pickup_time'].str[:2]
 
-fix, axis = plt.subplots(1,1,figsize=(12,7))
+fix, axis = plt.pyplot.subplots(1,1,figsize=(12,7))
 #aggregate trip_distance by hour for plotting
-tab = taxi_dt.pivot_table(index='pickup _hour', values='trip_distance', aggfunc=('mean','median')).reset_index()
+tab = taxi_dt.pivot_table(index='pickup_hour', values='trip_distance', aggfunc=('mean','median')).reset_index()
      
 tab.columns = ['Hour','Mean_distance','Median_distance']
 tab[['Mean_distance','Median_distance']].plot(ax=axis)
@@ -92,6 +96,23 @@ plt.xlabel('Hours after midnight')
 plt.title('Distribution of trip distance by pickup hour')
 plt.xlim([0,23])
 plt.show()
+
+
+# Q: RIDERSHIP IMPACT OF TIME OF THE DAY ON TRIP DISTANCE BY DROPOFF HOUR
+taxi_dt['dropoff_hour'] = taxi_dt['dropoff_time'].str[:2]
+
+fix, axis = plt.subplots(1,1,figsize=(12,7))
+#aggregate trip_distance by hour for plotting
+tab = taxi_dt.pivot_table(index='dropoff_hour', values='trip_distance', aggfunc=('mean','median')).reset_index()
+     
+tab.columns = ['Hour','Mean_distance','Median_distance']
+tab[['Mean_distance','Median_distance']].plot(ax=axis)
+plt.ylabel('Metric (miles)')
+plt.xlabel('Hours after midnight')
+plt.title('Distribution of trip distance by dropoff hour')
+plt.xlim([0,23])
+plt.show()
+
 
 print(tabulate(tab.values.tolist(),["Hour","Mean Distance","Median Distance"]))
 
@@ -104,13 +125,11 @@ of the day. To prove that, we will now take a look at the airport and non-airpor
 
 # CALCULATE AIRPORT TRIPS
 airport_trips = taxi_dt[(taxi_dt.rate_code == 2) | (taxi_dt.rate_code ==3)]  #rate_code 2 and 3 are jfk and Newark respectively 
-
 airport_trips['pickup_hour'] = airport_trips['pickup_time'].str[:2]
 
-fix, axis = plt.pyplot.subplots(1,1,figsize=(12,7))
+fix, axis = plt.subplots(1,1,figsize=(12,7))
 #aggregate trip_distance by hour for plotting
-tab = airport_trips.pivot_table(index='pickup_hour', values='trip_distance', aggfunc=('mean','median')).reset_index()
-     
+tab = airport_trips.pivot_table(index='pickup_hour', values='trip_distance', aggfunc=('mean','median')).reset_index()  
 tab.columns = ['Hour','Mean_distance','Median_distance']
 tab[['Mean_distance','Median_distance']].plot(ax=axis)
 plt.ylabel('Metric (miles)')
@@ -159,17 +178,29 @@ plt.show()
 list(taxi_dt)
 
 
-#DO PEOPLE LIKE TO TRAVEL IN GROUP/SHARE RIDES OR PREFER TO RIDE ALONE
+# DO PEOPLE LIKE TO TRAVEL IN GROUP/SHARE RIDES OR PREFER TO RIDE ALONE
 passenger_trips = taxi_dt.groupby(['passenger_count']).size().reset_index(name='trip_count')
-print(passenger_trips)
-
-plt.bar(passenger_trips.passenger_count,passenger_trips.trip_count,align='center', alpha=0.7)
-plt.xticks(passenger_trips.trip_count,passenger_trips.passenger_count)
-plt.ylabel('Trip Counts')
-plt.title('Trips vs number of passengers')
- 
+ax = passenger_trips.plot(kind='bar', title ="Passenger Count in a Trip", figsize=(12,5), legend=True, fontsize=12)
+ax.set_xlabel("Number of passenger in trip", fontsize=12)
+ax.set_ylabel("Taxi ride counts", fontsize=12)
 plt.show()
-# TO BE COMPLETED..........
+
+# TRAVEL IN TIME OF THE YEAR
+holiday_dt = taxi_dt[(taxi_dt['pickup_date'] > '2013-01-01') & (taxi_dt['pickup_date'] < '2013-10-31')]
+non_holiday_dt = taxi_dt[(taxi_dt['pickup_date'] > '2013-11-01') & (taxi_dt['pickup_date'] < '2013-12-31')]
+
+holiday_rides = holiday_dt.groupby(['passenger_count']).size().reset_index(name='trip_count')
+ax = holiday_rides.plot(kind='bar', title ="Passenger Counts during non holiday season", figsize=(12,5), legend=True, fontsize=12)
+ax.set_xlabel("Number of passenger in trip", fontsize=12)
+ax.set_ylabel("Taxi ride counts", fontsize=12)
+plt.show()
+
+non_holiday_ride = non_holiday_dt.groupby(['passenger_count']).size().reset_index(name='trip_count')
+ax = non_holiday_ride.plot(kind='bar', title ="Passenger Counts during holidat seasons", figsize=(12,5), legend=True, fontsize=12)
+ax.set_xlabel("Number of passenger in trip", fontsize=12)
+ax.set_ylabel("Taxi ride counts", fontsize=12)
+plt.show()
+
 
 #MOST COMMON PICKUP AND DROPOFF LOCATIONS
 

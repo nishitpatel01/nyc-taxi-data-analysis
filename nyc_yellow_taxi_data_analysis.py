@@ -34,13 +34,26 @@ print(taxi_dt.shape)
 #print variable datatypes
 print(taxi_dt.dtypes)
 
+#check missing values
+taxi_dt.isnull().sum()
+
 #print sample data 
 print(taxi_dt.head(10))
 
 #print statistics for each variables
 taxi_dt.describe()
 
-# DISTRIBUTION OF TRIP DISTANCES
+#standard daviation of each column 
+taxi_dt.std()
+
+#pairs plot 
+taxi_frame = taxi_dt[['trip_distance','rate_code','passenger_count','trip_time','payment_type','fare_amount']]
+taxi_pplot = s.pairplot(taxi_frame)
+taxi_pplot
+
+
+# Initial analysis before fitting the linear model
+# Distribution of trip distances
 # define the figure with 2 subplots
 fig,ax = plt.pyplot.subplots(1,2,figsize = (15,4)) 
 
@@ -72,17 +85,17 @@ plt.show()
  
 
 
-# DISTRIBUTION OF TRIP DISTANCE BY PICKUP HOUR
+## WHAT IS THIS ???????????
 s.pairplot(taxi_dt, vars=["tip_amount","fare_amount"], size=5)
 
 taxi_dt.plot.scatter("fare_amount","tip_amount",alpha=0.5)
 plt.title("Fare Amount vs Tip")
 plt.show()
 
-taxi_dt
 
 
-# Q: RIDERSHIP IMPACT OF TIME OF THE DAY ON TRIP DISTANCE BY PICKUP HOUR
+# Distribution of trip distance by pickup hour
+# Q: does time of the day affect the taxi ridership?
 taxi_dt['pickup_hour'] = taxi_dt['pickup_time'].str[:2]
 
 fix, axis = plt.pyplot.subplots(1,1,figsize=(12,7))
@@ -97,23 +110,6 @@ plt.title('Distribution of trip distance by pickup hour')
 plt.xlim([0,23])
 plt.show()
 
-
-# Q: RIDERSHIP IMPACT OF TIME OF THE DAY ON TRIP DISTANCE BY DROPOFF HOUR
-taxi_dt['dropoff_hour'] = taxi_dt['dropoff_time'].str[:2]
-
-fix, axis = plt.subplots(1,1,figsize=(12,7))
-#aggregate trip_distance by hour for plotting
-tab = taxi_dt.pivot_table(index='dropoff_hour', values='trip_distance', aggfunc=('mean','median')).reset_index()
-     
-tab.columns = ['Hour','Mean_distance','Median_distance']
-tab[['Mean_distance','Median_distance']].plot(ax=axis)
-plt.ylabel('Metric (miles)')
-plt.xlabel('Hours after midnight')
-plt.title('Distribution of trip distance by dropoff hour')
-plt.xlim([0,23])
-plt.show()
-
-
 print(tabulate(tab.values.tolist(),["Hour","Mean Distance","Median Distance"]))
 
 """ Plot is suggesting that the mean trip distances is longer in morning and evening hours. This could be the population that uses cabs to commute for
@@ -122,6 +118,7 @@ do not use it when they go back home. Hypothetically this makes sense as people 
 large number of people who take flights during morning and evening. This could also be a contributing factor that pushes the mean higher that other time
 of the day. To prove that, we will now take a look at the airport and non-airport taxi rides and its distribution.
 """
+
 
 # CALCULATE AIRPORT TRIPS
 airport_trips = taxi_dt[(taxi_dt.rate_code == 2) | (taxi_dt.rate_code ==3)]  #rate_code 2 and 3 are jfk and Newark respectively 
@@ -179,11 +176,48 @@ list(taxi_dt)
 
 
 # DO PEOPLE LIKE TO TRAVEL IN GROUP/SHARE RIDES OR PREFER TO RIDE ALONE
-passenger_trips = taxi_dt.groupby(['passenger_count']).size().reset_index(name='trip_count')
-ax = passenger_trips.plot(kind='bar', title ="Passenger Count in a Trip", figsize=(12,5), legend=True, fontsize=12)
-ax.set_xlabel("Number of passenger in trip", fontsize=12)
-ax.set_ylabel("Taxi ride counts", fontsize=12)
+# Q: Are people more likely to travel in groups during holiday seasons/
+taxi_dt["pickup_month"] = pd.DatetimeIndex(taxi_dt['pickup_date']).month
+jan_rides  = taxi_dt[(taxi_dt["pickup_month"] == 1)]
+feb_rides  = taxi_dt[(taxi_dt["pickup_month"] == 2)]
+mar_rides  = taxi_dt[(taxi_dt["pickup_month"] == 3)]
+apr_rides  = taxi_dt[(taxi_dt["pickup_month"] == 4)]
+may_rides  = taxi_dt[(taxi_dt["pickup_month"] == 5)]
+jun_rides  = taxi_dt[(taxi_dt["pickup_month"] == 6)]
+jul_rides  = taxi_dt[(taxi_dt["pickup_month"] == 7)]
+aug_rides  = taxi_dt[(taxi_dt["pickup_month"] == 8)]
+sep_rides  = taxi_dt[(taxi_dt["pickup_month"] == 9)]
+oct_rides  = taxi_dt[(taxi_dt["pickup_month"] == 10)]
+nov_rides  = taxi_dt[(taxi_dt["pickup_month"] == 11)]
+dec_rides  = taxi_dt[(taxi_dt["pickup_month"] == 12)]
+
+s.countplot(x="passenger_count",data=taxi_dt)
+""" about 2/3 of the total rides are single passenger rides. This seems to be working individuals. lets see how this trend looks like during
+holiday season and if people are taking more group rides than single rides"""
+
+
+fig, axs = plt.subplots(1,4,figsize=(18,4))
+s.countplot(x="passenger_count",data=jan_rides,ax=axs[0])
+s.countplot(x="passenger_count",data=feb_rides,ax=axs[1])
+s.countplot(x="passenger_count",data=mar_rides,ax=axs[2])
+s.countplot(x="passenger_count",data=apr_rides,ax=axs[3])
+s.countplot(x="passenger_count",data=may_rides,ax=axs[0])
+s.countplot(x="passenger_count",data=jun_rides,ax=axs[1])
+s.countplot(x="passenger_count",data=jul_rides,ax=axs[2])
+s.countplot(x="passenger_count",data=aug_rides,ax=axs[3])
+s.countplot(x="passenger_count",data=sep_rides,ax=axs[0])
+s.countplot(x="passenger_count",data=oct_rides,ax=axs[1])
+s.countplot(x="passenger_count",data=nov_rides,ax=axs[2])
+s.countplot(x="passenger_count",data=dec_rides,ax=axs[3])
+
+"""
+
+
+
+plt.figure(figsize=(12,8))
+s.countplot(x="pickup_weekday_name", data=taxi_dt)
 plt.show()
+
 
 # TRAVEL IN TIME OF THE YEAR
 holiday_dt = taxi_dt[(taxi_dt['pickup_date'] > '2013-01-01') & (taxi_dt['pickup_date'] < '2013-10-31')]
@@ -202,10 +236,11 @@ ax.set_ylabel("Taxi ride counts", fontsize=12)
 plt.show()
 
 
+
+
+
 #MOST COMMON PICKUP AND DROPOFF LOCATIONS
-
-
-
+# Q: what are the frequent pickup and dropoff places and how do they relate to specific time of the year?
 # Fetch all the data returned by the database query as a list
 lat_long = taxi_dt[['pickup_lattitude','pickup_longtidue']] #misspelled in data prep
 len(lat_long)

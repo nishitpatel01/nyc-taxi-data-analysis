@@ -17,7 +17,9 @@ from scipy.stats import skew
 from shapely.geometry import Point,Polygon,MultiPoint,MultiPolygon
 from scipy.stats import ttest_ind, f_oneway, lognorm, levy, skew, chisquare
 #import scipy.stats as st
-from tabulate import tabulate #pretty print of tables. source: http://txt.arboreus.com/2013/03/13/pretty-print-tables-in-python.html
+from tabulate import tabulate 
+from sklearn import linear_model
+from sklearn.metrics import  mean_squared_error, r2_score
 
 import gmplot
 import psycopg2
@@ -263,6 +265,95 @@ ax.set_xlabel("Number of passenger in trip", fontsize=12)
 ax.set_ylabel("Taxi ride counts", fontsize=12)
 plt.show()
 
+
+# FIT LINEAR REGRESSION WITH TIP AMOUNT AS RESPONSE
+# data exploration
+# check the derived variable 
+taxi_dt.tip_percent.describe()
+
+#we need to compare tip percent from manhatten island vs non-manhatten island
+# get the coordinates of manhatten island from web to create a bounding box of territory
+no_manhatten = [(40.796937, -73.949503),(40.787945, -73.955822),(40.782772, -73.943575),
+              (40.794715, -73.929801),(40.811261, -73.934153),(40.835371, -73.934515),
+              (40.868910, -73.911145),(40.872719, -73.910765),(40.878252, -73.926350),
+              (40.850557, -73.947262),(40.836225, -73.949899),(40.806050, -73.971255)]
+
+boundry = Polygon(no_manhatten)
+
+#custom function to check if a rides is in manhatten or not
+def is_manhatten(location,bound = boundry):
+    return 1*(Point(location).within(boundry))
+
+#createting new variable in dataset to check trip origin
+taxi_dt["is_manhatten"] = taxi_dt[["pickup_lattitude","pickup_longtidue"]].apply(lambda m:is_manhatten((m[0],m[1])),axis=1)
+
+#plot manhatten vs non-manhatten trips
+non_manhatten = taxi_dt[(taxi_dt.is_manhatten==0) & (taxi_dt.tip_percent>0)].tip_percent
+manhatten = taxi_dt[(taxi_dt.is_manhatten==1) & (taxi_dt.tip_percent>0)].tip_percent
+
+bins = np.histogram(manhatten,bins=20)[1]
+hist1 = np.histogram(manhatten,bins)
+hist2 = np.histogram(non_manhatten,bins)
+
+fig,axis = plt.subplots(1,1,figsize=(10,5))
+w = .4*(bins[1]-bins[0])
+axis.bar(bins[:-1],hist1[0],width=w,color='b')
+axis.bar(bins[:-1]+w,hist2[0],width=w,color='r')
+axis.set_yscale('log')
+axis.set_xlabel('Tip percent')
+axis.set_ylabel('Count')
+axis.set_title('Tip')
+axis.legend(['Non-Manhattan','Manhattah'],title='origin')
+plt.show()
+
+print('t-test results:', ttest_ind(non_manhatten,manhatten,equal_var=False))
+
+# tip vs non tip ride distribution
+# TO BE WORKED ON.................
+
+
+
+# feature engineering 
+# creating new variables - trip_direction, tip_given
+"""
+1. trip directions:  Direction_NS (is the cab moving Northt to South?) and Direction_EW (is the cab moving East to West). 
+    These are components of the two main directions, horizontal and vertical. The hypothesis is that the traffic may be different 
+    in different directions and it may affect the riders enthousiasm to tipping. They were derived from pickup and dropoff coordinates.
+"""
+#trip direction variable
+# value of this variable will be 2 if ride is moving from north to south, 1 if moving from south to north and 0 otherewise
+taxi_dt["trip_direction_NS"] = (taxi_dt.pickup_lattitude > taxi_dt.dropoff_lattitude)*1+1
+indices = taxi_dt[(taxi_dt.pickup_lattitude == taxi_dt.dropoff_lattitude) & (taxi_dt.pickup_lattitude!=0)].index
+taxi_dt.loc[indices,'trip_direction_NS'] = 0
+
+# value of this variable will be 2 if ride is moving from east to west, 1 if moving from west to east and 0 otherewise
+taxi_dt['trip_direction_EW'] = (taxi_dt.pickup_longtidue > taxi_dt.dropoff_longitude)*1+1
+indices = taxi_dt[(taxi_dt.pickup_longtidue == taxi_dt.dropoff_longitude) & (taxi_dt.pickup_longtidue!=0)].index
+taxi_dt.loc[indices,'trip_direction_EW'] = 0
+
+
+#tip given variable
+ taxi_dt["tip_given"] = (taxi_dt.tip_percent > 0) * 1
+
+
+#after feature engineering, we need to create model
+#we will build two models. First model will be classification model which will predict wheather or not passenger will give tip
+#Second model will be a regression model which will predict how much tip a passenger is likely to give (if he decises to give tip)
+
+#compare tip vs non-tip data distribution
+tip = taxi_dt[taxi_dt.tip_percent > 0]
+no_tip = taxi_dt[taxi_dt.tip_percent == 0]
+
+fig,axis = plt.subplots(1,2,figsize=(14,4))
+taxi_dt.tip_percent.hist(bins = 20,normed=True,ax=axis[0])
+axis[0].set_xlabel('Tip percent')
+axis[0].set_title('Distribution of Tip (%) - All rides')
+
+tip.tip_percent.hist(bins = 20,normed=True,ax=axis[1])
+axis[1].set_xlabel('Tip (%)')
+axis[1].set_title('Distribution of Tip (%) - Rides with tips')
+axis[1].set_ylabel('Group normalized count')
+plt.show()
 
 
 

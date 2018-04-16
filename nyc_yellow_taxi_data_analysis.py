@@ -16,10 +16,12 @@ import os, json, requests, pickle
 from scipy.stats import skew
 from shapely.geometry import Point,Polygon,MultiPoint,MultiPolygon
 from scipy.stats import ttest_ind, f_oneway, lognorm, levy, skew, chisquare
-#import scipy.stats as st
+
 from tabulate import tabulate 
 from sklearn import linear_model
 from sklearn.metrics import  mean_squared_error, r2_score
+from sklearn import cross_validation, metrics
+from sklearn.grid_search import GridSearchCV
 
 import gmplot
 import psycopg2
@@ -333,7 +335,7 @@ taxi_dt.loc[indices,'trip_direction_EW'] = 0
 
 
 #tip given variable
- taxi_dt["tip_given"] = (taxi_dt.tip_percent > 0) * 1
+taxi_dt["tip_given"] = (taxi_dt.tip_percent > 0) * 1
 
 
 #after feature engineering, we need to create model
@@ -354,6 +356,129 @@ axis[1].set_xlabel('Tip (%)')
 axis[1].set_title('Distribution of Tip (%) - Rides with tips')
 axis[1].set_ylabel('Group normalized count')
 plt.show()
+
+
+# check relationship between response variable tip percent with other predictors
+def visualize_continuous(dataframe,label,method={'type':'histogram','bins':20},outlier='on'):
+    #placeholder for variable being checked
+    var = dataframe[label]
+    m = var.mean()
+    s = var.std()
+    
+    #plot the figure
+    fig,axis = plt.subplots(1,2,figsize=(14,4))
+    axis[0].set_title('Distribution of '+label + '(trips where tips were given)')
+    axis[1].set_title('Tip % by '+label)
+    if outlier=='off': 
+        var = var[(var-m)<=3*s]
+        axis[0].set_title('Distribution of '+label+'(no outliers)')
+        axis[1].set_title('Tip percent by '+label+'(no outliers)')
+    if method['type'] == 'histogram':
+        var.hist(bins = method['bins'],ax=axis[0])
+    if method['type'] == 'boxplot': 
+        dataframe.loc[var.index].boxplot(label,ax=axis[0])
+    axis[1].plot(var,dataframe.loc[var.index].tip_percent,'.',alpha=0.3)
+    axis[0].set_xlabel(label)
+    axis[1].set_xlabel(label)
+    axis[0].set_ylabel('Count')
+    axis[1].set_ylabel('Tip percent')
+    
+#do the same with categorical variables
+def visualize_categories(dataframe,label,chart_type='histogram',ylimit=[None,None]):
+    #print label
+    cats = sorted(pd.unique(dataframe[label]))
+    if chart_type == 'boxplot': #generate boxplot
+        create_boxplot(dataframe,label,ylimit)
+    elif chart_type == 'histogram': # generate histogram
+        create_histogram(dataframe,label)
+    else:
+        pass
+    
+    #=> calculate test statistics
+    groups = dataframe[[label,'tip_percent']].groupby(label).groups #create groups
+    tips = dataframe.tip_percent
+    if len(cats)<=2: # if there are only two groups use t-test
+        print(ttest_ind(tips[groups[cats[0]]],tips[groups[cats[1]]]))
+    else: # otherwise, use one_way anova test
+        # prepare the command to be evaluated
+        cmd = "f_oneway("
+        for cat in cats:
+            cmd+="tips[groups["+str(cat)+"]],"
+        cmd=cmd[:-1]+")"
+        print("one way anova test:", eval(cmd)) #evaluate the command and print
+    print("Frequency of categories (%):\n",dataframe[label].value_counts(normalize=True)*100)
+
+def test_classification(df,label,yl=[0,50]):
+    if len(pd.unique(df[label]))==2: #check if the variable is categorical with only two  categores and run chisquare test
+        vals=pd.unique(df[label])
+        gp1 = df[df.tip_given==0][label].value_counts().sort_index()
+        gp2 = df[df.tip_given==1][label].value_counts().sort_index()
+        print("t-test if", label, "can be used to distinguish transaction with tip and without tip")
+        print(chisquare(gp1,gp2))
+    elif len(pd.unique(df[label]))>=10: #other wise  run the t-test
+        df.boxplot(label,by='tip_given')
+        plt.ylim(yl)
+        plt.show()
+        print("t-test if", label, "can be used to distinguish transaction with tip and without tip")
+        print("results:",ttest_ind(df[df.tip_given==0][label].values,df[df.tip_given==1][label].values,False))
+    else:
+        pass
+    
+def create_boxplot(dataframe,label,ylimit):
+    dataframe.boxplot('tip_percent',by=label)
+    plt.title('')
+    plt.ylabel('Tip percent')
+    if ylimit != [None,None]:
+        plt.ylim(ylimit)
+    plt.show()
+
+def create_histogram(dataframe,label):
+    cats = sorted(pd.unique(dataframe[label]))
+    colors = plt.cm.jet(np.linspace(0,1,len(cats)))
+    hx = np.array(map(lambda x:round(x,1),np.histogram(dataframe.tip_percent,bins=20)[1]))
+    fig,ax = plt.subplots(1,1,figsize = (15,4))
+    for i,cat in enumerate(cats):
+        vals = dataframe[dataframe[label] == cat].tip_percent
+        h = np.histogram(vals,bins=hx)
+        w = 0.9*(hx[1]-hx[0])/float(len(cats))
+        plt.bar(hx[:-1]+w*i,h[0],color=colors[i],width=w)
+    plt.legend(cats)
+    plt.yscale('log')
+    plt.title('Distribution of Tip by '+label)
+    plt.xlabel('Tip percent')
+    
+    
+# Example of exploration of the Fare_amount using the implented code:
+visualize_continuous(tip,'fare_amount',outlier='on')
+test_classification(taxi_dt,'fare_amount',[0,25])
+
+
+#plot correlation map to find which predictors variables are correlated with each other
+fig,ax = plt.subplots(1,1,figsize = [12,8])
+continuous_variables=['total_amount','fare_amount','trip_distance','trip_time','tolls_amount','tip_percent']
+cor_mat = taxi_dt[continuous_variables].corr()
+plt.imshow(cor_mat)
+plt.xticks(range(len(continuous_variables)),continuous_variables,rotation='vertical')
+plt.yticks(range(len(continuous_variables)),continuous_variables)
+plt.colorbar()
+plt.title('Correlation between continuous variables')
+plt.show()
+
+
+#check distribution with payment_type predictor
+# visualization of the Payment_type
+visualize_categories(tip,'payment_type','histogram',[13,8])
+
+
+#MODEL BUILDING
+
+
+
+
+
+
+
+
 
 
 

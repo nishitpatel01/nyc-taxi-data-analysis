@@ -18,10 +18,13 @@ from shapely.geometry import Point,Polygon,MultiPoint,MultiPolygon
 from scipy.stats import ttest_ind, f_oneway, lognorm, levy, skew, chisquare
 
 from tabulate import tabulate 
+
 from sklearn import linear_model
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestRegressor
 from sklearn.metrics import  mean_squared_error, r2_score
 from sklearn import cross_validation, metrics
-from sklearn.grid_search import GridSearchCV
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import train_test_split
 
 import gmplot
 import psycopg2
@@ -470,16 +473,60 @@ plt.show()
 visualize_categories(tip,'payment_type','histogram',[13,8])
 
 
-#MODEL BUILDING
+#MODEL: CLASSIFICATION MODEL BUILDING
+# test train split
+X = taxi_dt[["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_direction_EW","passenger_count",
+                    "trip_time","trip_distance","payment_type","fare_amount"]]
+
+y = taxi_dt[["tip_given"]]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=1121)
+
+t = dt.datetime.now()
+
+#optimize n_estimator thru gridsearch
+param_test = {'n_estimators':list(range(30,151,20))} 
+
+#create model
+GBClassifier = GradientBoostingClassifier(
+        learning_rate = 0.1,
+        min_samples_split = 2,
+        max_depth = 7,
+        max_features ='auto',
+        subsample = 0.7,
+        random_state = 42
+        )
+
+GBClassifier.fit(X_train,y_train)
+
+#hyper parameter search results thru cross validation
+GBClassifier_gs = GridSearchCV(estimator=GBClassifier, param_grid = param_test, scoring='roc_auc',n_jobs=-1,cv=10)
+GBClassifier_gs.fit(X_train,y_train)
+
+Predicted = GBClassifier.predict(X_test)
+np.mean(Predicted == y_test)
+
+#print statistics
+GBClassifier_gs.grid_scores_
+GBClassifier_gs.best_params_
+GBClassifier_gs.best_score_
+dt.datetime.now()-t
 
 
+#MODEL: REGRESSION MODEL
+X = tip[["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_direction_EW","passenger_count",
+                    "trip_time","trip_distance","payment_type","fare_amount"]]
 
+y = tip[["tip_percent"]]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=1121)
 
+RFRegressor = RandomForestRegressor()
+RFRegressor.fit(X_train,y_train.ravel())
 
-
-
-
-
+RFRegressor_gs = GridSearchCV(estimator=RFRegressor, param_grid = param_test,n_jobs=-1,cv=10)
+RFRegressor_gs.best_score_
+RFRegressor_gs.best_params_
+RFRegressor_gs.cv_results_
+dt.datetime.now()-t
 
 
 

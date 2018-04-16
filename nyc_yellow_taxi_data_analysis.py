@@ -10,15 +10,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as s
 
-from sklearn.preprocessing import normalize, scale
 import datetime as dt
-import os, json, requests, pickle
-from scipy.stats import skew
 from shapely.geometry import Point,Polygon,MultiPoint,MultiPolygon
 from scipy.stats import ttest_ind, f_oneway, lognorm, levy, skew, chisquare
-
 from tabulate import tabulate 
 
+from sklearn.preprocessing import normalize, scale
 from sklearn import linear_model
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestRegressor
 from sklearn.metrics import  mean_squared_error, r2_score
@@ -30,9 +27,16 @@ import gmplot
 import psycopg2
 
 
-taxi_dt = pd.read_csv('C:/Users/NishitP/Desktop/UIUC MCS-DS/CS-498 - Cloud Computing Applications - SPRING 2018/Project/nyc_taxi_data.csv', sep=',')
+# read the data file
+file = 'nyc_taxi_data.csv'
+taxi_dt = pd.read_csv(file)
+#taxi_dt = pd.read_csv('C:/Users/NishitP/Desktop/UIUC MCS-DS/CS-498 - Cloud Computing Applications - SPRING 2018/Project/nyc_taxi_data.csv', sep=',')
 
-#initial analysis on data quality and check
+
+##-------------------------------------------------------------------------------------
+##-------------------------------- DATA QUALITY CHECKS --------------------------------
+##-------------------------------------------------------------------------------------
+
 #print dataset dimensions
 print("number of observations:", taxi_dt.shape[0])
 print( "number of variables:", taxi_dt.shape[1])
@@ -59,10 +63,14 @@ taxi_pplot = s.pairplot(taxi_frame)
 taxi_pplot
 
 
-# Initial analysis before fitting the linear model
+
+##------------------------------------------------------------------------------------------------------------------------
+## EXPLORATORY DATA ANALYSIS
+##------------------------------------------------------------------------------------------------------------------------
+
 # Distribution of trip distances
 # define the figure with 2 subplots
-fig,ax = plt.pyplot.subplots(1,2,figsize = (15,4)) 
+fig,ax = plt.subplots(1,2,figsize = (15,4)) 
 
 # histogram of the number of trip distance
 taxi_dt.trip_distance.hist(bins=20,ax=ax[0], edgecolor='black')
@@ -74,7 +82,6 @@ ax[0].set_title('Histogram of Trip Distance')
 # create a vector to contain Trip Distance
 v = taxi_dt.trip_distance 
 # exclude any data point located further than 3 standard deviations of the median point and 
-# plot the histogram with 20 bins
 v[~((v-v.median()).abs()>3*v.std())].hist(bins=20,ax=ax[1], edgecolor='black') # 
 ax[1].set_xlabel('Trip Distance (miles)')
 ax[1].set_ylabel('Count')
@@ -87,10 +94,8 @@ scatter,loc,mean = lognorm.fit(taxi_dt.trip_distance.values,
 pdf_fitted = lognorm.pdf(np.arange(0,12,.1),scatter,loc,mean)
 ax[1].plot(np.arange(0,12,.1),600000*pdf_fitted,'r') 
 ax[1].legend(['data','lognormal fit'])
-
 plt.show()
  
-
 
 ## WHAT IS THIS ???????????
 s.pairplot(taxi_dt, vars=["tip_amount","fare_amount"], size=5)
@@ -98,7 +103,6 @@ s.pairplot(taxi_dt, vars=["tip_amount","fare_amount"], size=5)
 taxi_dt.plot.scatter("fare_amount","tip_amount",alpha=0.5)
 plt.title("Fare Amount vs Tip")
 plt.show()
-
 
 
 # Distribution of trip distance by pickup hour
@@ -164,7 +168,7 @@ h_nat = np.histogram(v_nat,bins=bins,normed=True)
 fig,ax = plt.subplots(1,2,figsize = (15,6))
 w = .4*(bins[1]-bins[0])
 ax[0].bar(bins[:-1],h_at[0],alpha=1,width=w,color='b')
-ax[0].bar(bins[:-1]+w,h_nat[0],alpha=1,width=w,color='g')
+ax[0].bar(bins[:-1]+w,h_nat[0],alpha=1,width=w,color='r')
 ax[0].legend(['Airport trips','Non-airport trips'],loc='best',title='group')
 ax[0].set_xlabel('Trip distance (miles)')
 ax[0].set_ylabel('Group normalized trips count')
@@ -198,7 +202,9 @@ oct_rides  = taxi_dt[(taxi_dt["pickup_month"] == 10)]
 nov_rides  = taxi_dt[(taxi_dt["pickup_month"] == 11)]
 dec_rides  = taxi_dt[(taxi_dt["pickup_month"] == 12)]
 
+fig,ax = plt.subplots(1,1,figsize = (12,5))
 s.countplot(x="passenger_count",data=taxi_dt)
+plt.title('Trips with number of passengers')
 """ about 2/3 of the total rides are single passenger rides. This seems to be working individuals. lets see how this trend looks like during
 holiday season and if people are taking more group rides than single rides"""
 
@@ -251,28 +257,23 @@ median  tip is close to 0 but mean tip si considerably higher. This is because t
 available for certain rides. during the processing, we make those tip values to be 0. 
 """
 
-
-
-
 # TRAVEL IN TIME OF THE YEAR
 holiday_dt = taxi_dt[(taxi_dt['pickup_date'] > '2013-01-01') & (taxi_dt['pickup_date'] < '2013-10-31')]
 non_holiday_dt = taxi_dt[(taxi_dt['pickup_date'] > '2013-11-01') & (taxi_dt['pickup_date'] < '2013-12-31')]
 
 holiday_rides = holiday_dt.groupby(['passenger_count']).size().reset_index(name='trip_count')
-ax = holiday_rides.plot(kind='bar', title ="Passenger Counts during non holiday season", figsize=(12,5), legend=True, fontsize=12)
+ax = holiday_rides.plot(kind='bar', title ="Passenger Counts during non holiday season", figsize=(12,5), legend=False, fontsize=12)
 ax.set_xlabel("Number of passenger in trip", fontsize=12)
 ax.set_ylabel("Taxi ride counts", fontsize=12)
 plt.show()
 
 non_holiday_ride = non_holiday_dt.groupby(['passenger_count']).size().reset_index(name='trip_count')
-ax = non_holiday_ride.plot(kind='bar', title ="Passenger Counts during holidat seasons", figsize=(12,5), legend=True, fontsize=12)
+ax = non_holiday_ride.plot(kind='bar', title ="Passenger Counts during holiday seasons", figsize=(12,5), legend=False, fontsize=12)
 ax.set_xlabel("Number of passenger in trip", fontsize=12)
 ax.set_ylabel("Taxi ride counts", fontsize=12)
 plt.show()
 
 
-# FIT LINEAR REGRESSION WITH TIP AMOUNT AS RESPONSE
-# data exploration
 # check the derived variable 
 taxi_dt.tip_percent.describe()
 
@@ -313,12 +314,50 @@ plt.show()
 
 print('t-test results:', ttest_ind(non_manhatten,manhatten,equal_var=False))
 
-# tip vs non tip ride distribution
-# TO BE WORKED ON.................
+
+
+#MOST COMMON PICKUP AND DROPOFF LOCATIONS
+# Q: what are the frequent pickup and dropoff places and how do they relate to specific time of the year?
+# Fetch all the data returned by the database query as a list
+lat_long = taxi_dt[['pickup_lattitude','pickup_longtidue']] #misspelled in data prep
+len(lat_long)
+lat_long = lat_long.values.T.tolist()
+
+# Initialize two empty lists to hold the latitude and longitude values
+latitude = []
+longitude = [] 
+
+# Transform the the fetched latitude and longitude data into two separate lists
+for i in range(len(lat_long)):
+	latitude.append(lat_long[i][0])
+	longitude.append(lat_long[i][1])
+
+# Initialize the map to the first location in the list
+gmap = gmplot.GoogleMapPlotter(latitude[0],longitude[0],1)
+
+# Draw the points on the map. I created my own marker for '#FF66666'. 
+# You can use other markers from the available list of markers. 
+# Another option is to place your own marker in the folder - 
+# /usr/local/lib/python3.5/dist-packages/gmplot/markers/
+gmap.scatter(latitude, longitude, '#FF6666', edge_width=10)
+
+# Write the map in an HTML file
+gmap.draw('map.html')
+
+#############################################
+############################################
+
+
+gmap = gmplot.GoogleMapPlotter.from_geocode("New York")
+gmap.draw('map.html')
 
 
 
-# feature engineering 
+
+##----------------------------------------------------------------------------------------------------
+##------------------------------------ FEATURE ENGINEERING -------------------------------------------
+##----------------------------------------------------------------------------------------------------
+
 # creating new variables - trip_direction, tip_given
 """
 1. trip directions:  Direction_NS (is the cab moving Northt to South?) and Direction_EW (is the cab moving East to West). 
@@ -473,6 +512,9 @@ plt.show()
 visualize_categories(tip,'payment_type','histogram',[13,8])
 
 
+##-------------------------------------------------------------------------------------
+##------------------------------- MODEL BUILDING --------------------------------------
+##-------------------------------------------------------------------------------------
 #MODEL: CLASSIFICATION MODEL BUILDING
 # test train split
 X = taxi_dt[["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_direction_EW","passenger_count",
@@ -481,6 +523,12 @@ X = taxi_dt[["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_
 y = taxi_dt[["tip_given"]]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=1121)
 
+
+def build_classification():
+    
+    print("classification model")
+    
+    
 t = dt.datetime.now()
 
 #optimize n_estimator thru gridsearch
@@ -529,41 +577,6 @@ RFRegressor_gs.cv_results_
 dt.datetime.now()-t
 
 
-
-#MOST COMMON PICKUP AND DROPOFF LOCATIONS
-# Q: what are the frequent pickup and dropoff places and how do they relate to specific time of the year?
-# Fetch all the data returned by the database query as a list
-lat_long = taxi_dt[['pickup_lattitude','pickup_longtidue']] #misspelled in data prep
-len(lat_long)
-lat_long = lat_long.values.T.tolist()
-
-# Initialize two empty lists to hold the latitude and longitude values
-latitude = []
-longitude = [] 
-
-# Transform the the fetched latitude and longitude data into two separate lists
-for i in range(len(lat_long)):
-	latitude.append(lat_long[i][0])
-	longitude.append(lat_long[i][1])
-
-# Initialize the map to the first location in the list
-gmap = gmplot.GoogleMapPlotter(latitude[0],longitude[0],1)
-
-# Draw the points on the map. I created my own marker for '#FF66666'. 
-# You can use other markers from the available list of markers. 
-# Another option is to place your own marker in the folder - 
-# /usr/local/lib/python3.5/dist-packages/gmplot/markers/
-gmap.scatter(latitude, longitude, '#FF6666', edge_width=10)
-
-# Write the map in an HTML file
-gmap.draw('map.html')
-
-#############################################
-############################################
-
-
-gmap = gmplot.GoogleMapPlotter.from_geocode("New York")
-gmap.draw('map.html')
 
 
 

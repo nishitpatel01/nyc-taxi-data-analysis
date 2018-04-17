@@ -380,9 +380,9 @@ taxi_dt.loc[indices,'trip_direction_EW'] = 0
 taxi_dt["tip_given"] = (taxi_dt.tip_percent > 0) * 1
 
 
-#after feature engineering, we need to create model
-#we will build two models. First model will be classification model which will predict wheather or not passenger will give tip
-#Second model will be a regression model which will predict how much tip a passenger is likely to give (if he decises to give tip)
+"""aprt from these new features, we also already have build some during the exploratory data analysis that we think are going to be helpful
+for our analysis.
+"""
 
 #compare tip vs non-tip data distribution
 tip = taxi_dt[taxi_dt.tip_percent > 0]
@@ -515,8 +515,15 @@ visualize_categories(tip,'payment_type','histogram',[13,8])
 ##-------------------------------------------------------------------------------------
 ##------------------------------- MODEL BUILDING --------------------------------------
 ##-------------------------------------------------------------------------------------
-#MODEL: CLASSIFICATION MODEL BUILDING
+#after feature engineering, we need to create model
+#we will build two models. First model will be classification model which will predict wheather or not passenger will give tip
+#Second model will be a regression model which will predict how much tip a passenger is likely to give (if he decises to give tip)
+
+#MODEL: CLASSIFICATION MODEL 
+# (passenger will give tip or not)
 # test train split
+predictors = ["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_direction_EW","passenger_count",
+                    "trip_time","trip_distance","payment_type","fare_amount"]
 X = taxi_dt[["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_direction_EW","passenger_count",
                     "trip_time","trip_distance","payment_type","fare_amount"]]
 
@@ -530,6 +537,7 @@ def build_classification():
     
     
 t = dt.datetime.now()
+print(t)
 
 #optimize n_estimator thru gridsearch
 param_test = {'n_estimators':list(range(30,151,20))} 
@@ -544,31 +552,82 @@ GBClassifier = GradientBoostingClassifier(
         random_state = 42
         )
 
-GBClassifier.fit(X_train,y_train)
+#fit the model
+GBClassifier.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
+
+#make predictions
+Predicted = GBClassifier.predict(X_train.as_matrix())
+#accuracies
+#Predicted.size
+#y_test.as_matrix().size
+#np.mean(Predicted == y_test.as_matrix())
+PredictedProb = GBClassifier.predict_proba(X_train.as_matrix())
+PredictedProb[:,1]
+
+#cross-validation
+gb_cv = cross_validation.cross_val_score(GBClassifier,X_train,y_train, cv=10,scoring='roc_auc')
+
+#model performance report
+print("Model accuracy:", metrics.accuracy_score(y_train.values,Predicted))
+print("AUC Score (from train set):",metrics.roc_auc_score(y_train,PredictedProb))
+print("CV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(gb_cv),np.std(gb_cv),np.min(gb_cv),np.max(gb_cv)))
+
+#print feature importance for model
+fig,ax = plt.subplots(1,1,figsize = [12,8])
+imp_features = pd.Series(GBClassifier.feature_importances_,predictors).sort_values(ascending=False)
+imp_features.plot(kind='bar',title='Feature Importance for classification model')
+plt.ylabel('Feature Importance Score')
+plt.show()
 
 #hyper parameter search results thru cross validation
-GBClassifier_gs = GridSearchCV(estimator=GBClassifier, param_grid = param_test, scoring='roc_auc',n_jobs=-1,cv=10)
-GBClassifier_gs.fit(X_train,y_train)
-
-Predicted = GBClassifier.predict(X_test)
-np.mean(Predicted == y_test)
+gb_gs = GridSearchCV(estimator = GBClassifier, param_grid = param_test, scoring='roc_auc', n_jobs = -1, cv = 10)
+gb_gs.fit(X_train,y_train)
 
 #print statistics
-GBClassifier_gs.grid_scores_
-GBClassifier_gs.best_params_
-GBClassifier_gs.best_score_
-dt.datetime.now()-t
+gb_gs.grid_scores_
+gb_gs.best_params_
+gb_gs.best_score_
+print(dt.datetime.now() - t)
+
+#peformance in test set
+test_pred = gb_gs.best_estimator_.predict(X_test)
+print("AUC:",metrics.ro(test_pred,y_test))
 
 
 #MODEL: REGRESSION MODEL
+# (how much of a tip a passenger is likely to give/should give)
+#test train split
+predictors = ["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_direction_EW","passenger_count",
+                    "trip_time","trip_distance","payment_type","fare_amount"]
 X = tip[["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_direction_EW","passenger_count",
                     "trip_time","trip_distance","payment_type","fare_amount"]]
 
 y = tip[["tip_percent"]]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=1121)
 
+#fit the regression model
 RFRegressor = RandomForestRegressor()
-RFRegressor.fit(X_train,y_train.ravel())
+RFRegressor.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
+
+#make prediction
+Predicted = RFRegressor.predict(X_train.as_matrix())
+
+#cross-validation
+rf_cv = cross_validation.cross_val_score(RFRegressor,X_train.as_matrix(),y_train.as_matrix(), cv=10,scoring='mean_squared_error')
+
+#model performance statistics
+print("Model accuracy:",metrics.mean_squared_error(y_train.values,Predicted))
+print("CV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(rf_cv),np.std(rf_cv),np.min(rf_cv),np.max(rf_cv)))
+
+#print feature importance for model
+fig,ax = plt.subplots(1,1,figsize = [12,8])
+imp_features = pd.Series(RFRegressor.feature_importances_,predictors).sort_values(ascending=False)
+imp_features.plot(kind='bar',title='Feature Importance for Regression model')
+plt.ylabel('Feature Importance Score')
+plt.show()
+
+
+
 
 RFRegressor_gs = GridSearchCV(estimator=RFRegressor, param_grid = param_test,n_jobs=-1,cv=10)
 RFRegressor_gs.best_score_

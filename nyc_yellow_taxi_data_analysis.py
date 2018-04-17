@@ -23,8 +23,17 @@ from sklearn import cross_validation, metrics
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 
+from mapsplotlib import mapsplot as mplt
 import gmplot
 import psycopg2
+
+# register map api
+api_key = ''
+mplt.register_api_key(api_key)
+taxi_map = taxi_dt[['pickup_longtidue','pickup_lattitude']]
+taxi_map = taxi_map.rename(columns={'pickup_longtidue': 'longitude', 'pickup_lattitude': 'latitude'})
+taxi_map = taxi_map.head(5000)
+mplt.density_plot(taxi_map['latitude'], taxi_map['longitude'])
 
 
 # read the data file
@@ -100,6 +109,7 @@ plt.show()
 ## WHAT IS THIS ???????????
 s.pairplot(taxi_dt, vars=["tip_amount","fare_amount"], size=5)
 
+fig,ax = plt.subplots(1,1,figsize = (12,4))
 taxi_dt.plot.scatter("fare_amount","tip_amount",alpha=0.5)
 plt.title("Fare Amount vs Tip")
 plt.show()
@@ -209,19 +219,19 @@ plt.title('Trips with number of passengers')
 holiday season and if people are taking more group rides than single rides"""
 
 
-fig, axs = plt.subplots(1,4,figsize=(18,4))
-s.countplot(x="passenger_count",data=jan_rides,ax=axs[0])
-s.countplot(x="passenger_count",data=feb_rides,ax=axs[1])
-s.countplot(x="passenger_count",data=mar_rides,ax=axs[2])
-s.countplot(x="passenger_count",data=apr_rides,ax=axs[3])
-s.countplot(x="passenger_count",data=may_rides,ax=axs[0])
-s.countplot(x="passenger_count",data=jun_rides,ax=axs[1])
-s.countplot(x="passenger_count",data=jul_rides,ax=axs[2])
-s.countplot(x="passenger_count",data=aug_rides,ax=axs[3])
-s.countplot(x="passenger_count",data=sep_rides,ax=axs[0])
-s.countplot(x="passenger_count",data=oct_rides,ax=axs[1])
-s.countplot(x="passenger_count",data=nov_rides,ax=axs[2])
-s.countplot(x="passenger_count",data=dec_rides,ax=axs[3])
+fig, axs = plt.subplots(1,4,figsize=(27,4))
+s.countplot(x="passenger_count",data=jan_rides,ax=axs[0]).set_title("Trips in January")
+s.countplot(x="passenger_count",data=feb_rides,ax=axs[1]).set_title("Trips in February")
+s.countplot(x="passenger_count",data=mar_rides,ax=axs[2]).set_title("Trips in March")
+s.countplot(x="passenger_count",data=apr_rides,ax=axs[3]).set_title("Trips in April")
+s.countplot(x="passenger_count",data=may_rides,ax=axs[0]).set_title("Trips in May")
+s.countplot(x="passenger_count",data=jun_rides,ax=axs[1]).set_title("Trips in June")
+s.countplot(x="passenger_count",data=jul_rides,ax=axs[2]).set_title("Trips in July")
+s.countplot(x="passenger_count",data=aug_rides,ax=axs[3]).set_title("Trips in August")
+s.countplot(x="passenger_count",data=sep_rides,ax=axs[0]).set_title("Trips in September")
+s.countplot(x="passenger_count",data=oct_rides,ax=axs[1]).set_title("Trips in October")
+s.countplot(x="passenger_count",data=nov_rides,ax=axs[2]).set_title("Trips in November")
+s.countplot(x="passenger_count",data=dec_rides,ax=axs[3]).set_title("Trips in December")
 
 """ from the monthly passenger count plots, it looks like that most of the rides throughout the year were from single riders. There are
 rides in 30-40k ranges which has more than one passengers. Interesting observation here is from January to August, we see that the most 
@@ -492,7 +502,7 @@ def create_histogram(dataframe,label):
     
 # Example of exploration of the Fare_amount using the implented code:
 visualize_continuous(tip,'fare_amount',outlier='on')
-test_classification(taxi_dt,'fare_amount',[0,25])
+#test_classification(taxi_dt,'fare_amount',[0,25])
 
 
 #plot correlation map to find which predictors variables are correlated with each other

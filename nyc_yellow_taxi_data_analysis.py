@@ -27,15 +27,6 @@ from mapsplotlib import mapsplot as mplt
 import gmplot
 import psycopg2
 
-# register map api
-api_key = ''
-mplt.register_api_key(api_key)
-taxi_map = taxi_dt[['pickup_longtidue','pickup_lattitude']]
-taxi_map = taxi_map.rename(columns={'pickup_longtidue': 'longitude', 'pickup_lattitude': 'latitude'})
-taxi_map = taxi_map.head(5000)
-mplt.density_plot(taxi_map['latitude'], taxi_map['longitude'])
-
-
 # read the data file
 file = 'nyc_taxi_data.csv'
 taxi_dt = pd.read_csv(file)
@@ -328,6 +319,26 @@ print('t-test results:', ttest_ind(non_manhatten,manhatten,equal_var=False))
 
 #MOST COMMON PICKUP AND DROPOFF LOCATIONS
 # Q: what are the frequent pickup and dropoff places and how do they relate to specific time of the year?
+# register map api
+api_key = 'AIzaSyCmyj18Nrfr-mWGYPwBhS5AjHknimK9zv8'
+mplt.register_api_key(api_key)
+taxi_map_pickup = taxi_dt[['pickup_longtidue','pickup_lattitude']]
+taxi_map_pickup = taxi_map_pickup.rename(columns={'pickup_longtidue': 'longitude', 'pickup_lattitude': 'latitude'})
+taxi_map_pickup = taxi_map_pickup.head(5000)
+mplt.density_plot(taxi_map_pickup['latitude'], taxi_map_pickup['longitude'])
+
+taxi_map_dropoff = taxi_dt[['dropoff_longitude','dropoff_lattitude','is_manhatten']]
+taxi_map_dropoff = taxi_map_dropoff.rename(columns={'dropoff_longitude':'longitude','dropoff_lattitude':'latitude'})
+taxi_map_dropoff = taxi_map_dropoff.head(5000)
+mplt.density_plot(taxi_map_dropoff['latitude'], taxi_map_dropoff['longitude'])
+
+"""from the pickup and drop location, it is clear that most of the trips are made in manhatten where density is extremely high. The other 
+boroughs have trips too but may not be visible due to very less number of trips. The other locations that have high pickup and dropoff
+densoties are jfk and laguardia airports that can be clearly seen from the map. You will also see that there have been many trips that 
+initiated on the way to airport in queens borough.
+"""
+
+
 # Fetch all the data returned by the database query as a list
 lat_long = taxi_dt[['pickup_lattitude','pickup_longtidue']] #misspelled in data prep
 len(lat_long)
@@ -392,6 +403,14 @@ taxi_dt["tip_given"] = (taxi_dt.tip_percent > 0) * 1
 
 """aprt from these new features, we also already have build some during the exploratory data analysis that we think are going to be helpful
 for our analysis.
+"""
+
+#scatter plot of response variable with newly created predictors after feature engineering
+taxi_features = tip[['trip_distance','rate_code','passenger_count','trip_time','payment_type','fare_amount','is_manhatten','tip_percent']]
+taxi_pplot = s.pairplot(taxi_features)
+taxi_pplot
+
+""" COMMENT ON PAIRS PLOT HERE
 """
 
 #compare tip vs non-tip data distribution
@@ -543,65 +562,71 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random
 
 def build_classification():
     
-    print("classification model")
+    print("building classificatio model...")
+    t = dt.datetime.now()
+    #optimize n_estimator thru gridsearch
+    param_test = {'n_estimators':list(range(30,151,20))} 
     
+    #create model
+    GBClassifier = GradientBoostingClassifier(
+            learning_rate = 0.1,
+            min_samples_split = 2,
+            max_depth = 7,
+            max_features ='auto',
+            subsample = 0.7,
+            random_state = 42
+            )
     
-t = dt.datetime.now()
-print(t)
+    #fit the model
+    GBClassifier.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
+    print("finished model training...")
+    
+    #make predictions
+    Predicted = GBClassifier.predict(X_train.as_matrix())
+    
+    #accuracies
+    #Predicted.size
+    #y_test.as_matrix().size
+    #np.mean(Predicted == y_test.as_matrix())
+    PredictedProb = GBClassifier.predict_proba(X_train.as_matrix())
+    PredictedProb[:,1]
 
-#optimize n_estimator thru gridsearch
-param_test = {'n_estimators':list(range(30,151,20))} 
+    #cross-validation
+    print("cross validation on model...")
+    gb_cv = cross_validation.cross_val_score(GBClassifier,X_train,y_train, cv=10,scoring='roc_auc')
 
-#create model
-GBClassifier = GradientBoostingClassifier(
-        learning_rate = 0.1,
-        min_samples_split = 2,
-        max_depth = 7,
-        max_features ='auto',
-        subsample = 0.7,
-        random_state = 42
-        )
+    print("checking model performance...")
+    #model performance report
+    print("Model accuracy:", metrics.accuracy_score(y_train.values,Predicted))
+    print("AUC Score (from train set):",metrics.roc_auc_score(y_train,PredictedProb))
+    print("CV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(gb_cv),np.std(gb_cv),np.min(gb_cv),np.max(gb_cv)))
 
-#fit the model
-GBClassifier.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
+    print("calculating most importance features of the model...")
+    #print feature importance for model
+    fig,ax = plt.subplots(1,1,figsize = [12,8])
+    imp_features = pd.Series(GBClassifier.feature_importances_,predictors).sort_values(ascending=False)
+    imp_features.plot(kind='bar',title='Feature Importance for classification model')
+    plt.ylabel('Feature Importance Score')
+    plt.show()
 
-#make predictions
-Predicted = GBClassifier.predict(X_train.as_matrix())
-#accuracies
-#Predicted.size
-#y_test.as_matrix().size
-#np.mean(Predicted == y_test.as_matrix())
-PredictedProb = GBClassifier.predict_proba(X_train.as_matrix())
-PredictedProb[:,1]
+    print("hyper parameter search...")
+    #hyper parameter search results thru cross validation
+    gb_gs = GridSearchCV(estimator = GBClassifier, param_grid = param_test, scoring='roc_auc', n_jobs = -1, cv = 10)
+    gb_gs.fit(X_train,y_train)
+    
+    #print statistics
+    gb_gs.grid_scores_
+    gb_gs.best_params_
+    gb_gs.best_score_
+    
+    print("test set performance...")
+    
+    #peformance in test set
+    test_pred = gb_gs.best_estimator_.predict(X_test)
+    print("AUC:",metrics.ro(test_pred,y_test))
 
-#cross-validation
-gb_cv = cross_validation.cross_val_score(GBClassifier,X_train,y_train, cv=10,scoring='roc_auc')
-
-#model performance report
-print("Model accuracy:", metrics.accuracy_score(y_train.values,Predicted))
-print("AUC Score (from train set):",metrics.roc_auc_score(y_train,PredictedProb))
-print("CV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(gb_cv),np.std(gb_cv),np.min(gb_cv),np.max(gb_cv)))
-
-#print feature importance for model
-fig,ax = plt.subplots(1,1,figsize = [12,8])
-imp_features = pd.Series(GBClassifier.feature_importances_,predictors).sort_values(ascending=False)
-imp_features.plot(kind='bar',title='Feature Importance for classification model')
-plt.ylabel('Feature Importance Score')
-plt.show()
-
-#hyper parameter search results thru cross validation
-gb_gs = GridSearchCV(estimator = GBClassifier, param_grid = param_test, scoring='roc_auc', n_jobs = -1, cv = 10)
-gb_gs.fit(X_train,y_train)
-
-#print statistics
-gb_gs.grid_scores_
-gb_gs.best_params_
-gb_gs.best_score_
-print(dt.datetime.now() - t)
-
-#peformance in test set
-test_pred = gb_gs.best_estimator_.predict(X_test)
-print("AUC:",metrics.ro(test_pred,y_test))
+    print("total processing time: ", dt.datetime.now())
+    
 
 
 #MODEL: REGRESSION MODEL
@@ -615,35 +640,45 @@ X = tip[["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_dire
 y = tip[["tip_percent"]]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=1121)
 
-#fit the regression model
-RFRegressor = RandomForestRegressor()
-RFRegressor.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
 
-#make prediction
-Predicted = RFRegressor.predict(X_train.as_matrix())
-
-#cross-validation
-rf_cv = cross_validation.cross_val_score(RFRegressor,X_train.as_matrix(),y_train.as_matrix(), cv=10,scoring='mean_squared_error')
-
-#model performance statistics
-print("Model accuracy:",metrics.mean_squared_error(y_train.values,Predicted))
-print("CV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(rf_cv),np.std(rf_cv),np.min(rf_cv),np.max(rf_cv)))
-
-#print feature importance for model
-fig,ax = plt.subplots(1,1,figsize = [12,8])
-imp_features = pd.Series(RFRegressor.feature_importances_,predictors).sort_values(ascending=False)
-imp_features.plot(kind='bar',title='Feature Importance for Regression model')
-plt.ylabel('Feature Importance Score')
-plt.show()
+def build_regression():
+     print("building regression model...")
+     t = dt.datetime.now()
+     
+     param_test = {'n_estimators':range(50,200,25)}
+     
+     #fit the regression model
+     RFRegressor = RandomForestRegressor()
+     RFRegressor.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
 
 
+     #make prediction
+     Predicted = RFRegressor.predict(X_train.as_matrix())
+    
+     print("performing cross validation...")
+     #cross-validation
+     rf_cv = cross_validation.cross_val_score(RFRegressor,X_train.as_matrix(),y_train.as_matrix(), cv=10,scoring='mean_squared_error')
+    
+    
+     #model performance statistics
+     print("checking model performance...")
+     print("Model accuracy:",metrics.mean_squared_error(y_train.values,Predicted))
+     print("CV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(rf_cv),np.std(rf_cv),np.min(rf_cv),np.max(rf_cv)))
 
+     print("calculate most important features...")
+     #print feature importance for model
+     fig,ax = plt.subplots(1,1,figsize = [12,8])
+     imp_features = pd.Series(RFRegressor.feature_importances_,predictors).sort_values(ascending=False)
+     imp_features.plot(kind='bar',title='Feature Importance for Regression model')
+     plt.ylabel('Feature Importance Score')
+     plt.show()
 
-RFRegressor_gs = GridSearchCV(estimator=RFRegressor, param_grid = param_test,n_jobs=-1,cv=10)
-RFRegressor_gs.best_score_
-RFRegressor_gs.best_params_
-RFRegressor_gs.cv_results_
-dt.datetime.now()-t
+     print("hyper parameter search...")
+     RFRegressor_gs = GridSearchCV(estimator=RFRegressor, param_grid = param_test,n_jobs = -1,cv = 10)
+     RFRegressor_gs.best_score_
+     RFRegressor_gs.best_params_
+     RFRegressor_gs.cv_results_
+     print("total processing time: ",dt.datetime.now() - t)
 
 
 

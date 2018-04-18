@@ -320,7 +320,7 @@ print('t-test results:', ttest_ind(non_manhatten,manhatten,equal_var=False))
 #MOST COMMON PICKUP AND DROPOFF LOCATIONS
 # Q: what are the frequent pickup and dropoff places and how do they relate to specific time of the year?
 # register map api
-api_key = 'AIzaSyCmyj18Nrfr-mWGYPwBhS5AjHknimK9zv8'
+api_key = ''
 mplt.register_api_key(api_key)
 taxi_map_pickup = taxi_dt[['pickup_longtidue','pickup_lattitude']]
 taxi_map_pickup = taxi_map_pickup.rename(columns={'pickup_longtidue': 'longitude', 'pickup_lattitude': 'latitude'})

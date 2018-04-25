@@ -11,12 +11,10 @@ import matplotlib.pyplot as plt
 import seaborn as s
 
 import datetime as dt
-from shapely.geometry import Point,Polygon,MultiPoint,MultiPolygon
-from scipy.stats import ttest_ind, f_oneway, lognorm, levy, skew, chisquare
 from tabulate import tabulate 
+from shapely.geometry import Point,Polygon,MultiPoint,MultiPolygon
 
 from sklearn.preprocessing import normalize, scale
-from sklearn import linear_model
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestRegressor
 from sklearn.metrics import  mean_squared_error, r2_score
 from sklearn import cross_validation, metrics
@@ -24,8 +22,10 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 
 from mapsplotlib import mapsplot as mplt
-import gmplot
-import psycopg2
+
+
+import warnings
+warnings.filterwarnings("ignore")
 
 # read the data file
 file = 'nyc_taxi_data.csv'
@@ -82,7 +82,7 @@ ax[0].set_title('Histogram of Trip Distance')
 # create a vector to contain Trip Distance
 v = taxi_dt.trip_distance 
 # exclude any data point located further than 3 standard deviations of the median point and 
-v[~((v-v.median()).abs()>3*v.std())].hist(bins=20,ax=ax[1], edgecolor='black') # 
+v[~((v-v.median()).abs()>3*v.std())].hist(bins=20,ax=ax[1], edgecolor='black') 
 ax[1].set_xlabel('Trip Distance (miles)')
 ax[1].set_ylabel('Count')
 ax[1].set_title('A. Histogram of Trip Distance (without outliers)')
@@ -96,14 +96,6 @@ ax[1].plot(np.arange(0,12,.1),600000*pdf_fitted,'r')
 ax[1].legend(['data','lognormal fit'])
 plt.show()
  
-
-## WHAT IS THIS ???????????
-s.pairplot(taxi_dt, vars=["tip_amount","fare_amount"], size=5)
-
-fig,ax = plt.subplots(1,1,figsize = (12,4))
-taxi_dt.plot.scatter("fare_amount","tip_amount",alpha=0.5)
-plt.title("Fare Amount vs Tip")
-plt.show()
 
 
 # Distribution of trip distance by pickup hour
@@ -149,8 +141,8 @@ plt.show()
 
 print(tabulate(tab.values.tolist(),["Hour","Mean Distance","Median Distance"]))
 
-""" This plot proves that the mean and the median of airport trips are almost similar during the days. These trips are appeared to be at the highest
-between 7PM - 10PM. ........MORE TO ADD.
+""" This plot proves that the mean and the median of airport trips are almost similar during the days. Airport trips follow similar trend
+where an increased number of long trips might be starting from many people coming to airport from further residential areas.
 """
 
 v_at = airport_trips.trip_distance #airport trips
@@ -339,6 +331,8 @@ initiated on the way to airport in queens borough.
 """
 
 
+#############################################
+## test code 
 # Fetch all the data returned by the database query as a list
 lat_long = taxi_dt[['pickup_lattitude','pickup_longtidue']] #misspelled in data prep
 len(lat_long)
@@ -365,14 +359,11 @@ gmap.scatter(latitude, longitude, '#FF6666', edge_width=10)
 # Write the map in an HTML file
 gmap.draw('map.html')
 
-#############################################
-############################################
-
 
 gmap = gmplot.GoogleMapPlotter.from_geocode("New York")
 gmap.draw('map.html')
 
-
+############################################
 
 
 ##----------------------------------------------------------------------------------------------------
@@ -405,13 +396,6 @@ taxi_dt["tip_given"] = (taxi_dt.tip_percent > 0) * 1
 for our analysis.
 """
 
-#scatter plot of response variable with newly created predictors after feature engineering
-taxi_features = tip[['trip_distance','rate_code','passenger_count','trip_time','payment_type','fare_amount','is_manhatten','tip_percent']]
-taxi_pplot = s.pairplot(taxi_features)
-taxi_pplot
-
-""" COMMENT ON PAIRS PLOT HERE
-"""
 
 #compare tip vs non-tip data distribution
 tip = taxi_dt[taxi_dt.tip_percent > 0]
@@ -427,6 +411,12 @@ axis[1].set_xlabel('Tip (%)')
 axis[1].set_title('Distribution of Tip (%) - Rides with tips')
 axis[1].set_ylabel('Group normalized count')
 plt.show()
+
+
+#scatter plot of response variable with newly created predictors after feature engineering
+taxi_features = tip[['trip_distance','rate_code','passenger_count','trip_time','payment_type','fare_amount','is_manhatten','tip_percent']]
+taxi_pplot = s.pairplot(taxi_features)
+taxi_pplot
 
 
 # check relationship between response variable tip percent with other predictors
@@ -521,7 +511,6 @@ def create_histogram(dataframe,label):
     
 # Example of exploration of the Fare_amount using the implented code:
 visualize_continuous(tip,'fare_amount',outlier='on')
-#test_classification(taxi_dt,'fare_amount',[0,25])
 
 
 #plot correlation map to find which predictors variables are correlated with each other
@@ -562,12 +551,13 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random
 
 def build_classification():
     
-    print("building classificatio model...")
+    print("building classification model...")
     t = dt.datetime.now()
     #optimize n_estimator thru gridsearch
     param_test = {'n_estimators':list(range(30,151,20))} 
     
     #create model
+    print("\nfitting the model...")
     GBClassifier = GradientBoostingClassifier(
             learning_rate = 0.1,
             min_samples_split = 2,
@@ -578,55 +568,52 @@ def build_classification():
             )
     
     #fit the model
-    GBClassifier.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
-    print("finished model training...")
+    print("\nhyper parameter search...")
+    #hyper parameter search results thru cross validation
+    gb_gs = GridSearchCV(estimator = GBClassifier, param_grid = param_test, scoring='roc_auc', n_jobs = -1, cv = 5)
+    print(("\nfitting the model..."))
+    gb_gs.fit(X_train,y_train)
+    print("\nfinished model training...")
+    print(gb_gs.best_score_)
+    print(gb_gs.best_params_)
+    
+    gb_gs.best_params_.fit(X_train,y_train)
     
     #make predictions
-    Predicted = GBClassifier.predict(X_train.as_matrix())
+    print("\nmaking predictions...")
+    Predicted = gb_gs.best_params_.predict(X_train.as_matrix())
     
     #accuracies
     #Predicted.size
     #y_test.as_matrix().size
     #np.mean(Predicted == y_test.as_matrix())
-    PredictedProb = GBClassifier.predict_proba(X_train.as_matrix())
+    PredictedProb = gb_gs.best_params_.predict_proba(X_train.as_matrix())
     PredictedProb[:,1]
 
     #cross-validation
-    print("cross validation on model...")
-    gb_cv = cross_validation.cross_val_score(GBClassifier,X_train,y_train, cv=10,scoring='roc_auc')
+    print("\ncross validation on model...")
+    gb_cv = cross_validation.cross_val_score(gb_gs.best_params_,X_train.as_matrix(),y_train.as_matrix(), cv=5,scoring='roc_auc')
 
-    print("checking model performance...")
+    print("\nchecking model performance...")
     #model performance report
-    print("Model accuracy:", metrics.accuracy_score(y_train.values,Predicted))
-    print("AUC Score (from train set):",metrics.roc_auc_score(y_train,PredictedProb))
-    print("CV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(gb_cv),np.std(gb_cv),np.min(gb_cv),np.max(gb_cv)))
+    print("\nModel accuracy:", metrics.accuracy_score(y_train.values,Predicted))
+    print("\nAUC Score (from train set):",metrics.roc_auc_score(y_train,PredictedProb))
+    print("\nCV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(gb_cv),np.std(gb_cv),np.min(gb_cv),np.max(gb_cv)))
 
-    print("calculating most importance features of the model...")
+    print("\ncalculating most importance features of the model...")
     #print feature importance for model
     fig,ax = plt.subplots(1,1,figsize = [12,8])
     imp_features = pd.Series(GBClassifier.feature_importances_,predictors).sort_values(ascending=False)
     imp_features.plot(kind='bar',title='Feature Importance for classification model')
     plt.ylabel('Feature Importance Score')
     plt.show()
+    print("\nThe most importance features for classification model (In order of importance)...")
+    print(imp_features)
 
-    print("hyper parameter search...")
-    #hyper parameter search results thru cross validation
-    gb_gs = GridSearchCV(estimator = GBClassifier, param_grid = param_test, scoring='roc_auc', n_jobs = -1, cv = 10)
-    gb_gs.fit(X_train,y_train)
+    print("\ntotal processing time: ", dt.datetime.now() - t)
     
-    #print statistics
-    gb_gs.grid_scores_
-    gb_gs.best_params_
-    gb_gs.best_score_
-    
-    print("test set performance...")
-    
-    #peformance in test set
-    test_pred = gb_gs.best_estimator_.predict(X_test)
-    print("AUC:",metrics.ro(test_pred,y_test))
 
-    print("total processing time: ", dt.datetime.now())
-    
+build_classification()
 
 
 #MODEL: REGRESSION MODEL
@@ -640,50 +627,52 @@ X = tip[["rate_code","pickup_hour","pickup_month","trip_direction_NS","trip_dire
 y = tip[["tip_percent"]]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=1121)
 
-
 def build_regression():
-     print("building regression model...")
+     print("\nbuilding regression model...")
+     print("\nread the data...")
      t = dt.datetime.now()
      
      param_test = {'n_estimators':range(50,200,25)}
      
      #fit the regression model
      RFRegressor = RandomForestRegressor()
-     RFRegressor.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
-
+     
+     print("\nhyper parameter search...")
+     RFRegressor_gs = GridSearchCV(estimator=RFRegressor, param_grid = param_test,n_jobs = -1,cv = 5)
+     print("\nfitting regression...")
+     RFRegressor_gs.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
+     print(RFRegressor_gs.best_score_)
+     print(RFRegressor_gs.best_params_)
+     
+     RFRegressor_gs.best_params_.fit(X_train.as_matrix(),y_train.as_matrix().ravel())
 
      #make prediction
-     Predicted = RFRegressor.predict(X_train.as_matrix())
+     print("\nmaking prediction on train data...")
+     Predicted = RFRegressor_gs.best_params_.predict(X_train.as_matrix())
     
-     print("performing cross validation...")
+     print("\nperforming cross validation...")
      #cross-validation
-     rf_cv = cross_validation.cross_val_score(RFRegressor,X_train.as_matrix(),y_train.as_matrix(), cv=10,scoring='mean_squared_error')
-    
+     rf_cv = cross_validation.cross_val_score(RFRegressor_gs.best_params_,X_train.as_matrix(),y_train.as_matrix(), cv=10,scoring='mean_squared_error')
     
      #model performance statistics
-     print("checking model performance...")
-     print("Model accuracy:",metrics.mean_squared_error(y_train.values,Predicted))
-     print("CV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(rf_cv),np.std(rf_cv),np.min(rf_cv),np.max(rf_cv)))
+     print("\nchecking model performance...")
+     print("\nModel mean suqared error:",metrics.mean_squared_error(y_train.values,Predicted))
+     print("\nCV Score - Mean : %.7g | Std : %.7g | Min : %.7g | Max : %.7g" % (np.mean(rf_cv),np.std(rf_cv),np.min(rf_cv),np.max(rf_cv)))
 
-     print("calculate most important features...")
+     print("\ncalculate most important features...")
      #print feature importance for model
      fig,ax = plt.subplots(1,1,figsize = [12,8])
-     imp_features = pd.Series(RFRegressor.feature_importances_,predictors).sort_values(ascending=False)
+     imp_features = pd.Series(RFRegressor_gs.best_params_.feature_importances_,predictors).sort_values(ascending=False)
      imp_features.plot(kind='bar',title='Feature Importance for Regression model')
      plt.ylabel('Feature Importance Score')
      plt.show()
+     print("\nThe most importance features for regression in (In order of importance)...")
+     print(imp_features)
 
-     print("hyper parameter search...")
-     RFRegressor_gs = GridSearchCV(estimator=RFRegressor, param_grid = param_test,n_jobs = -1,cv = 10)
-     RFRegressor_gs.best_score_
-     RFRegressor_gs.best_params_
-     RFRegressor_gs.cv_results_
-     print("total processing time: ",dt.datetime.now() - t)
+     print("\ntotal processing time: ",dt.datetime.now() - t)
 
 
-
-
-
+build_regression()
 
 
 

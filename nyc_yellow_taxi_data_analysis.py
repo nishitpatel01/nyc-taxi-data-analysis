@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore")
 # read the data file
 file = 'nyc_taxi_data.csv'
 taxi_dt = pd.read_csv(file)
-#taxi_dt = pd.read_csv('C:/Users/NishitP/Desktop/UIUC MCS-DS/CS-498 - Cloud Computing Applications - SPRING 2018/Project/nyc_taxi_data.csv', sep=',')
+
 
 
 ##-------------------------------------------------------------------------------------
